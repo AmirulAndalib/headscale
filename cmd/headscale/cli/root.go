@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/tcnksm/go-latest"
 )
 
@@ -49,14 +50,7 @@ func initConfig() {
 		}
 	}
 
-	cfg, err := types.GetHeadscaleConfig()
-	if err != nil {
-		log.Fatal().Caller().Err(err).Msg("Failed to get headscale configuration")
-	}
-
 	machineOutput := HasMachineOutputFlag()
-
-	zerolog.SetGlobalLevel(cfg.Log.Level)
 
 	// If the user has requested a "node" readable format,
 	// then disable login so the output remains valid.
@@ -64,24 +58,26 @@ func initConfig() {
 		zerolog.SetGlobalLevel(zerolog.Disabled)
 	}
 
-	if cfg.Log.Format == types.JSONLogFormat {
-		log.Logger = log.Output(os.Stdout)
+	logFormat := viper.GetString("log.format")
+	if logFormat == types.JSONLogFormat {
+	 	log.Logger = log.Output(os.Stdout)
 	}
 
-	if !cfg.DisableUpdateCheck && !machineOutput {
+	disableUpdateCheck := viper.GetBool("disable_check_updates")
+	if !disableUpdateCheck && !machineOutput {
 		if (runtime.GOOS == "linux" || runtime.GOOS == "darwin") &&
-			Version != "dev" {
+			types.Version != "dev" {
 			githubTag := &latest.GithubTag{
 				Owner:      "juanfont",
 				Repository: "headscale",
 			}
-			res, err := latest.Check(githubTag, Version)
+			res, err := latest.Check(githubTag, types.Version)
 			if err == nil && res.Outdated {
 				//nolint
-				fmt.Printf(
+				log.Warn().Msgf(
 					"An updated version of Headscale has been found (%s vs. your current %s). Check it out https://github.com/juanfont/headscale/releases\n",
 					res.Current,
-					Version,
+					types.Version,
 				)
 			}
 		}
