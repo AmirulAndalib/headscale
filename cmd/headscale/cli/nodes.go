@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/netip"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -26,8 +27,10 @@ func init() {
 	listNodesNamespaceFlag := listNodesCmd.Flags().Lookup("namespace")
 	listNodesNamespaceFlag.Deprecated = deprecateNamespaceMessage
 	listNodesNamespaceFlag.Hidden = true
-
 	nodeCmd.AddCommand(listNodesCmd)
+
+	listNodeRoutesCmd.Flags().Uint64P("identifier", "i", 0, "Node identifier (ID)")
+	nodeCmd.AddCommand(listNodeRoutesCmd)
 
 	registerNodeCmd.Flags().StringP("user", "u", "", "User")
 
@@ -38,33 +41,33 @@ func init() {
 
 	err := registerNodeCmd.MarkFlagRequired("user")
 	if err != nil {
-		log.Fatalf(err.Error())
+		log.Fatal(err.Error())
 	}
 	registerNodeCmd.Flags().StringP("key", "k", "", "Key")
 	err = registerNodeCmd.MarkFlagRequired("key")
 	if err != nil {
-		log.Fatalf(err.Error())
+		log.Fatal(err.Error())
 	}
 	nodeCmd.AddCommand(registerNodeCmd)
 
 	expireNodeCmd.Flags().Uint64P("identifier", "i", 0, "Node identifier (ID)")
 	err = expireNodeCmd.MarkFlagRequired("identifier")
 	if err != nil {
-		log.Fatalf(err.Error())
+		log.Fatal(err.Error())
 	}
 	nodeCmd.AddCommand(expireNodeCmd)
 
 	renameNodeCmd.Flags().Uint64P("identifier", "i", 0, "Node identifier (ID)")
 	err = renameNodeCmd.MarkFlagRequired("identifier")
 	if err != nil {
-		log.Fatalf(err.Error())
+		log.Fatal(err.Error())
 	}
 	nodeCmd.AddCommand(renameNodeCmd)
 
 	deleteNodeCmd.Flags().Uint64P("identifier", "i", 0, "Node identifier (ID)")
 	err = deleteNodeCmd.MarkFlagRequired("identifier")
 	if err != nil {
-		log.Fatalf(err.Error())
+		log.Fatal(err.Error())
 	}
 	nodeCmd.AddCommand(deleteNodeCmd)
 
@@ -72,7 +75,7 @@ func init() {
 
 	err = moveNodeCmd.MarkFlagRequired("identifier")
 	if err != nil {
-		log.Fatalf(err.Error())
+		log.Fatal(err.Error())
 	}
 
 	moveNodeCmd.Flags().StringP("user", "u", "", "New user")
@@ -84,19 +87,21 @@ func init() {
 
 	err = moveNodeCmd.MarkFlagRequired("user")
 	if err != nil {
-		log.Fatalf(err.Error())
+		log.Fatal(err.Error())
 	}
 	nodeCmd.AddCommand(moveNodeCmd)
 
 	tagCmd.Flags().Uint64P("identifier", "i", 0, "Node identifier (ID)")
-
-	err = tagCmd.MarkFlagRequired("identifier")
-	if err != nil {
-		log.Fatalf(err.Error())
-	}
-	tagCmd.Flags().
-		StringSliceP("tags", "t", []string{}, "List of tags to add to the node")
+	tagCmd.MarkFlagRequired("identifier")
+	tagCmd.Flags().StringSliceP("tags", "t", []string{}, "List of tags to add to the node")
 	nodeCmd.AddCommand(tagCmd)
+
+	approveRoutesCmd.Flags().Uint64P("identifier", "i", 0, "Node identifier (ID)")
+	approveRoutesCmd.MarkFlagRequired("identifier")
+	approveRoutesCmd.Flags().StringSliceP("routes", "r", []string{}, "List of routes that will be approved")
+	nodeCmd.AddCommand(approveRoutesCmd)
+
+	nodeCmd.AddCommand(backfillNodeIPsCmd)
 }
 
 var nodeCmd = &cobra.Command{
@@ -113,27 +118,23 @@ var registerNodeCmd = &cobra.Command{
 		user, err := cmd.Flags().GetString("user")
 		if err != nil {
 			ErrorOutput(err, fmt.Sprintf("Error getting user: %s", err), output)
-
-			return
 		}
 
-		ctx, client, conn, cancel := getHeadscaleCLIClient()
+		ctx, client, conn, cancel := newHeadscaleCLIWithConfig()
 		defer cancel()
 		defer conn.Close()
 
-		machineKey, err := cmd.Flags().GetString("key")
+		registrationID, err := cmd.Flags().GetString("key")
 		if err != nil {
 			ErrorOutput(
 				err,
 				fmt.Sprintf("Error getting node key from flag: %s", err),
 				output,
 			)
-
-			return
 		}
 
 		request := &v1.RegisterNodeRequest{
-			Key:  machineKey,
+			Key:  registrationID,
 			User: user,
 		}
 
@@ -147,8 +148,6 @@ var registerNodeCmd = &cobra.Command{
 				),
 				output,
 			)
-
-			return
 		}
 
 		SuccessOutput(
@@ -166,17 +165,13 @@ var listNodesCmd = &cobra.Command{
 		user, err := cmd.Flags().GetString("user")
 		if err != nil {
 			ErrorOutput(err, fmt.Sprintf("Error getting user: %s", err), output)
-
-			return
 		}
 		showTags, err := cmd.Flags().GetBool("tags")
 		if err != nil {
 			ErrorOutput(err, fmt.Sprintf("Error getting tags flag: %s", err), output)
-
-			return
 		}
 
-		ctx, client, conn, cancel := getHeadscaleCLIClient()
+		ctx, client, conn, cancel := newHeadscaleCLIWithConfig()
 		defer cancel()
 		defer conn.Close()
 
@@ -191,21 +186,15 @@ var listNodesCmd = &cobra.Command{
 				fmt.Sprintf("Cannot get nodes: %s", status.Convert(err).Message()),
 				output,
 			)
-
-			return
 		}
 
 		if output != "" {
 			SuccessOutput(response.GetNodes(), "", output)
-
-			return
 		}
 
 		tableData, err := nodesToPtables(user, showTags, response.GetNodes())
 		if err != nil {
 			ErrorOutput(err, fmt.Sprintf("Error converting to table: %s", err), output)
-
-			return
 		}
 
 		err = pterm.DefaultTable.WithHasHeader().WithData(tableData).Render()
@@ -215,8 +204,68 @@ var listNodesCmd = &cobra.Command{
 				fmt.Sprintf("Failed to render pterm table: %s", err),
 				output,
 			)
+		}
+	},
+}
+
+var listNodeRoutesCmd = &cobra.Command{
+	Use:     "list-routes",
+	Short:   "List routes available on nodes",
+	Aliases: []string{"lsr", "routes"},
+	Run: func(cmd *cobra.Command, args []string) {
+		output, _ := cmd.Flags().GetString("output")
+		identifier, err := cmd.Flags().GetUint64("identifier")
+		if err != nil {
+			ErrorOutput(
+				err,
+				fmt.Sprintf("Error converting ID to integer: %s", err),
+				output,
+			)
 
 			return
+		}
+
+		ctx, client, conn, cancel := newHeadscaleCLIWithConfig()
+		defer cancel()
+		defer conn.Close()
+
+		request := &v1.ListNodesRequest{}
+
+		response, err := client.ListNodes(ctx, request)
+		if err != nil {
+			ErrorOutput(
+				err,
+				"Cannot get nodes: "+status.Convert(err).Message(),
+				output,
+			)
+		}
+
+		if output != "" {
+			SuccessOutput(response.GetNodes(), "", output)
+		}
+
+		nodes := response.GetNodes()
+		if identifier != 0 {
+			for _, node := range response.GetNodes() {
+				if node.GetId() == identifier {
+					nodes = []*v1.Node{node}
+					break
+				}
+			}
+		}
+
+		tableData, err := nodeRoutesToPtables(nodes)
+		if err != nil {
+			ErrorOutput(err, fmt.Sprintf("Error converting to table: %s", err), output)
+		}
+
+		err = pterm.DefaultTable.WithHasHeader().WithData(tableData).Render()
+		if err != nil {
+			ErrorOutput(
+				err,
+				fmt.Sprintf("Failed to render pterm table: %s", err),
+				output,
+			)
 		}
 	},
 }
@@ -240,7 +289,7 @@ var expireNodeCmd = &cobra.Command{
 			return
 		}
 
-		ctx, client, conn, cancel := getHeadscaleCLIClient()
+		ctx, client, conn, cancel := newHeadscaleCLIWithConfig()
 		defer cancel()
 		defer conn.Close()
 
@@ -283,7 +332,7 @@ var renameNodeCmd = &cobra.Command{
 			return
 		}
 
-		ctx, client, conn, cancel := getHeadscaleCLIClient()
+		ctx, client, conn, cancel := newHeadscaleCLIWithConfig()
 		defer cancel()
 		defer conn.Close()
 
@@ -332,7 +381,7 @@ var deleteNodeCmd = &cobra.Command{
 			return
 		}
 
-		ctx, client, conn, cancel := getHeadscaleCLIClient()
+		ctx, client, conn, cancel := newHeadscaleCLIWithConfig()
 		defer cancel()
 		defer conn.Close()
 
@@ -432,7 +481,7 @@ var moveNodeCmd = &cobra.Command{
 			return
 		}
 
-		ctx, client, conn, cancel := getHeadscaleCLIClient()
+		ctx, client, conn, cancel := newHeadscaleCLIWithConfig()
 		defer cancel()
 		defer conn.Close()
 
@@ -474,6 +523,57 @@ var moveNodeCmd = &cobra.Command{
 		}
 
 		SuccessOutput(moveResponse.GetNode(), "Node moved to another user", output)
+	},
+}
+
+var backfillNodeIPsCmd = &cobra.Command{
+	Use:   "backfillips",
+	Short: "Backfill IPs missing from nodes",
+	Long: `
+Backfill IPs can be used to add/remove IPs from nodes
+based on the current configuration of Headscale.
+
+If there are nodes that does not have IPv4 or IPv6
+even if prefixes for both are configured in the config,
+this command can be used to assign IPs of the sort to
+all nodes that are missing.
+
+If you remove IPv4 or IPv6 prefixes from the config,
+it can be run to remove the IPs that should no longer
+be assigned to nodes.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		var err error
+		output, _ := cmd.Flags().GetString("output")
+
+		confirm := false
+		prompt := &survey.Confirm{
+			Message: "Are you sure that you want to assign/remove IPs to/from nodes?",
+		}
+		err = survey.AskOne(prompt, &confirm)
+		if err != nil {
+			return
+		}
+		if confirm {
+			ctx, client, conn, cancel := newHeadscaleCLIWithConfig()
+			defer cancel()
+			defer conn.Close()
+
+			changes, err := client.BackfillNodeIPs(ctx, &v1.BackfillNodeIPsRequest{Confirmed: confirm})
+			if err != nil {
+				ErrorOutput(
+					err,
+					fmt.Sprintf(
+						"Error backfilling IPs: %s",
+						status.Convert(err).Message(),
+					),
+					output,
+				)
+
+				return
+			}
+
+			SuccessOutput(changes, "Node IPs backfilled successfully", output)
+		}
 	},
 }
 
@@ -564,14 +664,14 @@ func nodesToPtables(
 		forcedTags = strings.TrimLeft(forcedTags, ",")
 		var invalidTags string
 		for _, tag := range node.GetInvalidTags() {
-			if !contains(node.GetForcedTags(), tag) {
+			if !slices.Contains(node.GetForcedTags(), tag) {
 				invalidTags += "," + pterm.LightRed(tag)
 			}
 		}
 		invalidTags = strings.TrimLeft(invalidTags, ",")
 		var validTags string
 		for _, tag := range node.GetValidTags() {
-			if !contains(node.GetForcedTags(), tag) {
+			if !slices.Contains(node.GetForcedTags(), tag) {
 				validTags += "," + pterm.LightGreen(tag)
 			}
 		}
@@ -621,13 +721,42 @@ func nodesToPtables(
 	return tableData, nil
 }
 
+func nodeRoutesToPtables(
+	nodes []*v1.Node,
+) (pterm.TableData, error) {
+	tableHeader := []string{
+		"ID",
+		"Hostname",
+		"Approved",
+		"Available",
+		"Serving",
+	}
+	tableData := pterm.TableData{tableHeader}
+
+	for _, node := range nodes {
+		nodeData := []string{
+			strconv.FormatUint(node.GetId(), util.Base10),
+			node.GetGivenName(),
+			strings.Join(node.GetApprovedRoutes(), ", "),
+			strings.Join(node.GetAvailableRoutes(), ", "),
+			strings.Join(node.GetSubnetRoutes(), ", "),
+		}
+		tableData = append(
+			tableData,
+			nodeData,
+		)
+	}
+
+	return tableData, nil
+}
+
 var tagCmd = &cobra.Command{
 	Use:     "tag",
 	Short:   "Manage the tags of a node",
 	Aliases: []string{"tags", "t"},
 	Run: func(cmd *cobra.Command, args []string) {
 		output, _ := cmd.Flags().GetString("output")
-		ctx, client, conn, cancel := getHeadscaleCLIClient()
+		ctx, client, conn, cancel := newHeadscaleCLIWithConfig()
 		defer cancel()
 		defer conn.Close()
 
@@ -663,6 +792,63 @@ var tagCmd = &cobra.Command{
 			ErrorOutput(
 				err,
 				fmt.Sprintf("Error while sending tags to headscale: %s", err),
+				output,
+			)
+
+			return
+		}
+
+		if resp != nil {
+			SuccessOutput(
+				resp.GetNode(),
+				"Node updated",
+				output,
+			)
+		}
+	},
+}
+
+var approveRoutesCmd = &cobra.Command{
+	Use:   "approve-routes",
+	Short: "Manage the approved routes of a node",
+	Run: func(cmd *cobra.Command, args []string) {
+		output, _ := cmd.Flags().GetString("output")
+		ctx, client, conn, cancel := newHeadscaleCLIWithConfig()
+		defer cancel()
+		defer conn.Close()
+
+		// retrieve flags from CLI
+		identifier, err := cmd.Flags().GetUint64("identifier")
+		if err != nil {
+			ErrorOutput(
+				err,
+				fmt.Sprintf("Error converting ID to integer: %s", err),
+				output,
+			)
+
+			return
+		}
+		routes, err := cmd.Flags().GetStringSlice("routes")
+		if err != nil {
+			ErrorOutput(
+				err,
+				fmt.Sprintf("Error retrieving list of routes to add to node, %v", err),
+				output,
+			)
+
+			return
+		}
+
+		// Sending tags to node
+		request := &v1.SetApprovedRoutesRequest{
+			NodeId: identifier,
+			Routes: routes,
+		}
+		resp, err := client.SetApprovedRoutes(ctx, request)
+		if err != nil {
+			ErrorOutput(
+				err,
+				fmt.Sprintf("Error while sending routes to headscale: %s", err),
 				output,
 			)
 

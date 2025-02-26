@@ -101,6 +101,36 @@
         ]
       }
     },
+    "/api/v1/apikey/{prefix}": {
+      "delete": {
+        "operationId": "HeadscaleService_DeleteApiKey",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteApiKeyResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "HeadscaleService"
+        ]
+      }
+    },
     "/api/v1/debug/node": {
       "post": {
         "summary": "--- Node start ---",
@@ -157,6 +187,36 @@
             "in": "query",
             "required": false,
             "type": "string"
+          }
+        ],
+        "tags": [
+          "HeadscaleService"
+        ]
+      }
+    },
+    "/api/v1/node/backfillips": {
+      "post": {
+        "operationId": "HeadscaleService_BackfillNodeIPs",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1BackfillNodeIPsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "confirmed",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -260,6 +320,45 @@
         ]
       }
     },
+    "/api/v1/node/{nodeId}/approve_routes": {
+      "post": {
+        "operationId": "HeadscaleService_SetApprovedRoutes",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SetApprovedRoutesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "nodeId",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/HeadscaleServiceSetApprovedRoutesBody"
+            }
+          }
+        ],
+        "tags": [
+          "HeadscaleService"
+        ]
+      }
+    },
     "/api/v1/node/{nodeId}/expire": {
       "post": {
         "operationId": "HeadscaleService_ExpireNode",
@@ -328,37 +427,6 @@
         ]
       }
     },
-    "/api/v1/node/{nodeId}/routes": {
-      "get": {
-        "operationId": "HeadscaleService_GetNodeRoutes",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetNodeRoutesResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "nodeId",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "uint64"
-          }
-        ],
-        "tags": [
-          "HeadscaleService"
-        ]
-      }
-    },
     "/api/v1/node/{nodeId}/tags": {
       "post": {
         "operationId": "HeadscaleService_SetTags",
@@ -389,15 +457,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "type": "object",
-              "properties": {
-                "tags": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              }
+              "$ref": "#/definitions/HeadscaleServiceSetTagsBody"
             }
           }
         ],
@@ -432,10 +492,65 @@
             "format": "uint64"
           },
           {
-            "name": "user",
-            "in": "query",
-            "required": false,
-            "type": "string"
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/HeadscaleServiceMoveNodeBody"
+            }
+          }
+        ],
+        "tags": [
+          "HeadscaleService"
+        ]
+      }
+    },
+    "/api/v1/policy": {
+      "get": {
+        "summary": "--- Policy start ---",
+        "operationId": "HeadscaleService_GetPolicy",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetPolicyResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "HeadscaleService"
+        ]
+      },
+      "put": {
+        "operationId": "HeadscaleService_SetPolicy",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SetPolicyResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SetPolicyRequest"
+            }
           }
         ],
         "tags": [
@@ -536,122 +651,6 @@
         ]
       }
     },
-    "/api/v1/routes": {
-      "get": {
-        "summary": "--- Route start ---",
-        "operationId": "HeadscaleService_GetRoutes",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetRoutesResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "HeadscaleService"
-        ]
-      }
-    },
-    "/api/v1/routes/{routeId}": {
-      "delete": {
-        "operationId": "HeadscaleService_DeleteRoute",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1DeleteRouteResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "routeId",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "uint64"
-          }
-        ],
-        "tags": [
-          "HeadscaleService"
-        ]
-      }
-    },
-    "/api/v1/routes/{routeId}/disable": {
-      "post": {
-        "operationId": "HeadscaleService_DisableRoute",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1DisableRouteResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "routeId",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "uint64"
-          }
-        ],
-        "tags": [
-          "HeadscaleService"
-        ]
-      }
-    },
-    "/api/v1/routes/{routeId}/enable": {
-      "post": {
-        "operationId": "HeadscaleService_EnableRoute",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1EnableRouteResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "routeId",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "uint64"
-          }
-        ],
-        "tags": [
-          "HeadscaleService"
-        ]
-      }
-    },
     "/api/v1/user": {
       "get": {
         "operationId": "HeadscaleService_ListUsers",
@@ -669,11 +668,33 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "uint64"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
         "tags": [
           "HeadscaleService"
         ]
       },
       "post": {
+        "summary": "--- User start ---",
         "operationId": "HeadscaleService_CreateUser",
         "responses": {
           "200": {
@@ -704,36 +725,7 @@
         ]
       }
     },
-    "/api/v1/user/{name}": {
-      "get": {
-        "summary": "--- User start ---",
-        "operationId": "HeadscaleService_GetUser",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetUserResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "HeadscaleService"
-        ]
-      },
+    "/api/v1/user/{id}": {
       "delete": {
         "operationId": "HeadscaleService_DeleteUser",
         "responses": {
@@ -752,10 +744,11 @@
         },
         "parameters": [
           {
-            "name": "name",
+            "name": "id",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uint64"
           }
         ],
         "tags": [
@@ -763,7 +756,7 @@
         ]
       }
     },
-    "/api/v1/user/{oldName}/rename/{newName}": {
+    "/api/v1/user/{oldId}/rename/{newName}": {
       "post": {
         "operationId": "HeadscaleService_RenameUser",
         "responses": {
@@ -782,10 +775,11 @@
         },
         "parameters": [
           {
-            "name": "oldName",
+            "name": "oldId",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "string",
+            "format": "uint64"
           },
           {
             "name": "newName",
@@ -801,6 +795,36 @@
     }
   },
   "definitions": {
+    "HeadscaleServiceMoveNodeBody": {
+      "type": "object",
+      "properties": {
+        "user": {
+          "type": "string"
+        }
+      }
+    },
+    "HeadscaleServiceSetApprovedRoutesBody": {
+      "type": "object",
+      "properties": {
+        "routes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "HeadscaleServiceSetTagsBody": {
+      "type": "object",
+      "properties": {
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "protobufAny": {
       "type": "object",
       "properties": {
@@ -823,6 +847,7 @@
         "details": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/protobufAny"
           }
         }
@@ -849,6 +874,17 @@
         "lastSeen": {
           "type": "string",
           "format": "date-time"
+        }
+      }
+    },
+    "v1BackfillNodeIPsResponse": {
+      "type": "object",
+      "properties": {
+        "changes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -906,6 +942,15 @@
       "properties": {
         "name": {
           "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "pictureUrl": {
+          "type": "string"
         }
       }
     },
@@ -945,19 +990,13 @@
         }
       }
     },
+    "v1DeleteApiKeyResponse": {
+      "type": "object"
+    },
     "v1DeleteNodeResponse": {
       "type": "object"
     },
-    "v1DeleteRouteResponse": {
-      "type": "object"
-    },
     "v1DeleteUserResponse": {
-      "type": "object"
-    },
-    "v1DisableRouteResponse": {
-      "type": "object"
-    },
-    "v1EnableRouteResponse": {
       "type": "object"
     },
     "v1ExpireApiKeyRequest": {
@@ -1001,33 +1040,15 @@
         }
       }
     },
-    "v1GetNodeRoutesResponse": {
+    "v1GetPolicyResponse": {
       "type": "object",
       "properties": {
-        "routes": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v1Route"
-          }
-        }
-      }
-    },
-    "v1GetRoutesResponse": {
-      "type": "object",
-      "properties": {
-        "routes": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/v1Route"
-          }
-        }
-      }
-    },
-    "v1GetUserResponse": {
-      "type": "object",
-      "properties": {
-        "user": {
-          "$ref": "#/definitions/v1User"
+        "policy": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
         }
       }
     },
@@ -1037,6 +1058,7 @@
         "apiKeys": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/v1ApiKey"
           }
         }
@@ -1048,6 +1070,7 @@
         "nodes": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/v1Node"
           }
         }
@@ -1059,6 +1082,7 @@
         "preAuthKeys": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/v1PreAuthKey"
           }
         }
@@ -1070,6 +1094,7 @@
         "users": {
           "type": "array",
           "items": {
+            "type": "object",
             "$ref": "#/definitions/v1User"
           }
         }
@@ -1115,10 +1140,6 @@
           "type": "string",
           "format": "date-time"
         },
-        "lastSuccessfulUpdate": {
-          "type": "string",
-          "format": "date-time"
-        },
         "expiry": {
           "type": "string",
           "format": "date-time"
@@ -1156,6 +1177,24 @@
         },
         "online": {
           "type": "boolean"
+        },
+        "approvedRoutes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "availableRoutes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "subnetRoutes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -1230,37 +1269,29 @@
         }
       }
     },
-    "v1Route": {
+    "v1SetApprovedRoutesResponse": {
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string",
-          "format": "uint64"
-        },
         "node": {
           "$ref": "#/definitions/v1Node"
-        },
-        "prefix": {
+        }
+      }
+    },
+    "v1SetPolicyRequest": {
+      "type": "object",
+      "properties": {
+        "policy": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SetPolicyResponse": {
+      "type": "object",
+      "properties": {
+        "policy": {
           "type": "string"
         },
-        "advertised": {
-          "type": "boolean"
-        },
-        "enabled": {
-          "type": "boolean"
-        },
-        "isPrimary": {
-          "type": "boolean"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
         "updatedAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "deletedAt": {
           "type": "string",
           "format": "date-time"
         }
@@ -1278,7 +1309,8 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string"
+          "type": "string",
+          "format": "uint64"
         },
         "name": {
           "type": "string"
@@ -1286,6 +1318,21 @@
         "createdAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "providerId": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "profilePicUrl": {
+          "type": "string"
         }
       }
     }

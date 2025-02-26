@@ -32,7 +32,8 @@ func GenerateRandomBytes(n int) ([]byte, error) {
 func GenerateRandomStringURLSafe(n int) (string, error) {
 	b, err := GenerateRandomBytes(n)
 
-	return base64.RawURLEncoding.EncodeToString(b), err
+	uenc := base64.RawURLEncoding.EncodeToString(b)
+	return uenc[:n], err
 }
 
 // GenerateRandomStringDNSSafe returns a DNS-safe
@@ -56,16 +57,6 @@ func GenerateRandomStringDNSSafe(size int) (string, error) {
 	return str[:size], nil
 }
 
-func IsStringInSlice(slice []string, str string) bool {
-	for _, s := range slice {
-		if s == str {
-			return true
-		}
-	}
-
-	return false
-}
-
 func TailNodesToString(nodes []*tailcfg.Node) string {
 	temp := make([]string, len(nodes))
 
@@ -82,4 +73,22 @@ func TailMapResponseToString(resp tailcfg.MapResponse) string {
 		resp.Node.Name,
 		TailNodesToString(resp.Peers),
 	)
+}
+
+func TailcfgFilterRulesToString(rules []tailcfg.FilterRule) string {
+	var sb strings.Builder
+
+	for index, rule := range rules {
+		sb.WriteString(fmt.Sprintf(`
+{
+  SrcIPs: %v
+  DstIPs: %v
+}
+`, rule.SrcIPs, rule.DstPorts))
+		if index < len(rules)-1 {
+			sb.WriteString(", ")
+		}
+	}
+
+	return fmt.Sprintf("[ %s ](%d)", sb.String(), len(rules))
 }
